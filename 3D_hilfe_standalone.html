@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Koordinaten ablesen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Bewusst nur Whitemode – unabhängig vom Theme des Betrachters. */
+  :root, :root[data-theme="dark"], :root[data-theme="light"]{
+    color-scheme:light;
+    --paper:#ffffff;
+    --grid:#cfe0ef;
+    --grid5:#a9c8e2;
+    --ink:#1b1b1b;
+    --muted:#5f6a76;
+    --axisnum:#39434d;
+    --line:#d8dee3;
+    --field:#ffffff;
+    --x1:#c81e1e;
+    --x2:#15843b;
+    --x3:#1f5fd0;
+    --focus:#1f5fd0;
+  }
+
+  *{box-sizing:border-box}
+  img{max-width:100%}
+  html{background:var(--paper);-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  button,input{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .wrap{max-width:1240px;margin:0 auto;padding:34px 26px 60px;padding-left:max(26px,env(safe-area-inset-left));padding-right:max(26px,env(safe-area-inset-right))}
+  @media (max-width:560px){ .wrap{padding:20px 16px 48px} }
+
+  header{margin-bottom:20px;max-width:64ch}
+  h1{
+    font-size:clamp(1.4rem,1.1rem + 1.3vw,1.9rem);
+    font-weight:600;margin:0 0 8px;letter-spacing:-.01em;text-wrap:balance;
+  }
+  header p{margin:0;color:var(--muted);font-size:.96rem}
+
+  .layout{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 300px;
+    gap:34px;
+    align-items:start;
+  }
+  @media (max-width:880px){ .layout{grid-template-columns:1fr;gap:26px} }
+
+  .plot{ border:1px solid var(--line); background:var(--paper); }
+  svg#sv{display:block;width:100%;height:auto}
+
+  .topbar{
+    display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;margin-bottom:10px;
+    -webkit-user-select:none;user-select:none;
+  }
+  .runbar{ display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 4px 0; }
+  button.replay{
+    font:inherit;font-weight:500;
+    display:inline-flex;align-items:center;gap:8px;
+    background:var(--ink);color:var(--paper);
+    border:1px solid var(--ink);border-radius:4px;padding:9px 15px;cursor:pointer;
+    min-height:40px;
+  }
+  button.replay:hover{opacity:.88}
+  button.replay:active{transform:translateY(1px)}
+
+  .tempo{display:flex;align-items:center;gap:11px;font-size:.85rem;color:var(--muted)}
+  .tempo-label{font-family:"IBM Plex Mono",monospace;letter-spacing:.04em}
+  .tempo output{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;min-width:3ch}
+  #speed{
+    -webkit-appearance:none;appearance:none;
+    width:150px;height:24px;background:transparent;cursor:pointer;
+  }
+  #speed::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--line)}
+  #speed::-moz-range-track{height:6px;border-radius:3px;background:var(--line)}
+  #speed::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:24px;height:24px;margin-top:-9px;border-radius:50%;
+    background:var(--ink);border:2px solid var(--paper);box-shadow:0 1px 4px rgba(0,0,0,.32);
+  }
+  #speed::-moz-range-thumb{
+    width:22px;height:22px;border:2px solid var(--paper);border-radius:50%;
+    background:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.32);
+  }
+  #speed:focus-visible{outline:2px solid var(--focus);outline-offset:5px;border-radius:3px}
+  .caption{
+    margin:0;font-size:.9rem;color:var(--muted);
+    font-family:"IBM Plex Mono",monospace;flex:1;min-width:200px;
+  }
+
+  aside{display:flex;flex-direction:column;gap:22px}
+  aside section{border-top:1px solid var(--line);padding-top:14px}
+  aside h2{
+    font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 12px;
+  }
+
+  .vec{
+    display:flex;align-items:baseline;justify-content:center;gap:1px;
+    font-family:"IBM Plex Mono",monospace;font-size:1.9rem;font-weight:500;
+    font-variant-numeric:tabular-nums;margin-bottom:16px;
+  }
+  .vec .p{color:var(--muted);font-weight:400}
+  .c1{color:var(--x1)} .c2{color:var(--x2)} .c3{color:var(--x3)}
+  .vec .q{color:var(--muted)}
+  .coord{
+    display:inline-block;padding:0 5px;border-radius:4px;
+    transition:transform .18s ease, background .18s ease, box-shadow .18s ease;
+  }
+  .coord.glow{
+    transform:translateY(-2px) scale(1.14);
+    background:color-mix(in srgb, currentColor 16%, transparent);
+    box-shadow:0 0 0 1px color-mix(in srgb, currentColor 45%, transparent),
+               0 0 20px color-mix(in srgb, currentColor 60%, transparent);
+  }
+
+  .stepper{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:7px}
+  .stepper .name{
+    display:flex;align-items:center;gap:7px;
+    font-family:"IBM Plex Mono",monospace;font-weight:500;width:42px;
+  }
+  .dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .d1{background:var(--x1)} .d2{background:var(--x2)} .d3{background:var(--x3)}
+  .stepper input{
+    font-family:"IBM Plex Mono",monospace;font-size:16px;
+    text-align:center;font-variant-numeric:tabular-nums;
+    width:100%;padding:7px 4px;border:1px solid var(--line);
+    border-radius:4px;background:var(--field);color:var(--ink);
+  }
+  .stepper button{
+    font:inherit;width:38px;height:38px;line-height:1;
+    border:1px solid var(--line);background:var(--field);
+    color:var(--ink);border-radius:4px;cursor:pointer;font-size:1.15rem;
+  }
+  .stepper button:hover{border-color:var(--focus)}
+  .stepper button:active{transform:translateY(1px)}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+  .hint{margin:12px 0 0;font-size:.86rem;color:var(--muted)}
+  .hint b{font-weight:600}
+
+  .note p{margin:0 0 10px;font-size:.9rem}
+  .note p:last-child{margin-bottom:0}
+  .note b{font-weight:600}
+  .rule{display:flex;gap:9px;font-size:.86rem;margin-top:9px}
+  .rule .dot{margin-top:5px}
+  .rule .k{font-family:"IBM Plex Mono",monospace}
+
+  .steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .steps li{display:flex;gap:10px;font-size:.88rem}
+  .steps .n{
+    flex:none;width:20px;height:20px;border-radius:50%;font-size:.72rem;font-weight:600;
+    display:grid;place-items:center;color:var(--paper);
+  }
+  .steps li:nth-child(1) .n{background:var(--x3)}
+  .steps li:nth-child(2) .n{background:var(--x2)}
+  .steps li:nth-child(3) .n{background:var(--x1)}
+
+  footer{margin-top:24px;color:var(--muted);font-size:.82rem;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Koordinaten eines Punktes ablesen</h1>
+    <p>Bekannt ist nur die Höhe <span class="c3">x₃</span> des Punktes P. Von P aus geht es <span class="c3">senkrecht nach unten</span>, dann <span class="c2">parallel zur x₂-Achse</span> bis zur x₁-Achse und weiter bis zum Ursprung – so ergeben sich <span class="c2">x₂</span> und <span class="c1">x₁</span>.</p>
+  </header>
+
+  <div class="layout">
+    <div>
+      <div class="topbar">
+        <button class="replay" id="replay" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          Von vorne abspielen
+        </button>
+        <label class="tempo">
+          <span class="tempo-label">Tempo</span>
+          <input id="speed" type="range" min="50" max="220" step="5" value="50" aria-label="Abspieltempo">
+          <output id="speedOut">0,5×</output>
+        </label>
+      </div>
+      <div class="plot">
+        <svg id="sv" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" role="img" aria-label="Animiertes Ablesen der Koordinaten eines Punktes im dreidimensionalen Koordinatensystem auf Karopapier">
+          <defs>
+            <pattern id="grid" width="26" height="26" patternUnits="userSpaceOnUse">
+              <path d="M26 0H0V26" fill="none" stroke="var(--grid)" stroke-width="1"/>
+            </pattern>
+            <pattern id="grid5" width="130" height="130" patternUnits="userSpaceOnUse">
+              <path d="M130 0H0V130" fill="none" stroke="var(--grid5)" stroke-width="1"/>
+            </pattern>
+            <marker id="ah1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--x1)"/></marker>
+            <marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--x2)"/></marker>
+            <marker id="ah3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--x3)"/></marker>
+            <filter id="hudGlow1" x="-150%" y="-150%" width="400%" height="400%">
+              <feDropShadow in="SourceGraphic" dx="0" dy="0" stdDeviation="7" flood-color="#c81e1e" flood-opacity="0.55" result="s"/>
+              <feDropShadow in="s" dx="0" dy="0" stdDeviation="3" flood-color="#c81e1e" flood-opacity="1"/>
+            </filter>
+            <filter id="hudGlow2" x="-150%" y="-150%" width="400%" height="400%">
+              <feDropShadow in="SourceGraphic" dx="0" dy="0" stdDeviation="7" flood-color="#15843b" flood-opacity="0.55" result="s"/>
+              <feDropShadow in="s" dx="0" dy="0" stdDeviation="3" flood-color="#15843b" flood-opacity="1"/>
+            </filter>
+            <filter id="hudGlow3" x="-150%" y="-150%" width="400%" height="400%">
+              <feDropShadow in="SourceGraphic" dx="0" dy="0" stdDeviation="7" flood-color="#1f5fd0" flood-opacity="0.55" result="s"/>
+              <feDropShadow in="s" dx="0" dy="0" stdDeviation="3" flood-color="#1f5fd0" flood-opacity="1"/>
+            </filter>
+          </defs>
+          <rect id="bg1" fill="url(#grid)"/>
+          <rect id="bg5" fill="url(#grid5)"/>
+          <g id="static"></g>
+          <g id="anim"></g>
+          <g id="hud"></g>
+        </svg>
+      </div>
+      <div class="runbar">
+        <p class="caption" id="caption">Animation startet …</p>
+      </div>
+    </div>
+
+    <aside>
+      <section>
+        <h2>Gesuchter Punkt</h2>
+        <div class="vec" aria-hidden="true">
+          <span class="p">P&nbsp;(</span>
+          <span class="coord c1" id="disp1">?</span>
+          <span class="p">&nbsp;|&nbsp;</span>
+          <span class="coord c2" id="disp2">?</span>
+          <span class="p">&nbsp;|&nbsp;</span>
+          <span class="coord c3" id="disp3">5</span>
+          <span class="p">)</span>
+        </div>
+        <div class="stepper">
+          <span class="name"><span class="dot d3"></span>x₃</span>
+          <input id="in3" type="number" min="-8" max="12" step="1" value="5" inputmode="numeric" aria-label="Höhe x3">
+          <button type="button" data-d="-1" aria-label="x3 verringern">−</button>
+          <button type="button" data-d="1" aria-label="x3 erhöhen">+</button>
+        </div>
+        <p class="hint">Nur <b class="c3">x₃</b> wird vorgegeben. <b class="c2">x₂</b> und <b class="c1">x₁</b> werden beim Abzählen Schritt für Schritt aufgedeckt.</p>
+      </section>
+
+      <section>
+        <h2>Vorgehen</h2>
+        <ol class="steps">
+          <li><span class="n">1</span><div>Von P aus <b>x₃</b> Einheiten senkrecht nach unten (je 2&nbsp;Kästchen) bis zur x₁-x₂-Ebene.</div></li>
+          <li><span class="n">2</span><div>Parallel zur x₂-Achse zählen, bis die x₁-Achse berührt wird → <b>x₂</b>.</div></li>
+          <li><span class="n">3</span><div>Von dort entlang der x₁-Achse bis zum Ursprung zählen → <b>x₁</b>.</div></li>
+        </ol>
+      </section>
+    </aside>
+  </div>
+
+  <footer>Das Beispiel nutzt x₁ = 3 und x₂ = 4; nur die Höhe x₃ ist einstellbar. Die Animation läuft in Dauerschleife (Endansicht 5 s), beim Ändern von x₃ startet sie neu.</footer>
+</div>
+
+<script>
+(function(){
+  const S = 26;
+  const NS = "http://www.w3.org/2000/svg";
+  const sv = document.getElementById('sv');
+  const staticL = document.getElementById('static');
+  const animL = document.getElementById('anim');
+  const bg1 = document.getElementById('bg1');
+  const bg5 = document.getElementById('bg5');
+  const hud = document.getElementById('hud');
+  const cap = document.getElementById('caption');
+  const disp = [null, document.getElementById('disp1'), document.getElementById('disp2'), document.getElementById('disp3')];
+  const in3 = document.getElementById('in3');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Beispielpunkt: x1 und x2 fest, x3 einstellbar
+  const state = {x1:3, x2:4, x3:5};
+  let animId = null, debId = null, loopId = null;
+  let hudNums = {}, hudBaseY = 0, hudX = 0, hudY = 0;
+  let revealed = {1:false, 2:false, 3:true};
+  let speed = 0.5;
+  const LOOP_PAUSE = 5000;
+
+  const speedEl = document.getElementById('speed');
+  const speedOut = document.getElementById('speedOut');
+  try{ const s = parseFloat(localStorage.getItem('koord-speed')); if(s >= 0.4 && s <= 3) speed = s; }catch(e){}
+  function syncSpeedUI(){
+    speedEl.value = Math.round(speed * 100);
+    speedOut.textContent = speed.toFixed(1).replace('.', ',') + '×';
+  }
+  syncSpeedUI();
+  speedEl.addEventListener('input', () => {
+    speed = (+speedEl.value) / 100;
+    speedOut.textContent = speed.toFixed(1).replace('.', ',') + '×';
+    try{ localStorage.setItem('koord-speed', speed); }catch(e){}
+  });
+
+  function mk(tag, attrs){
+    const e = document.createElementNS(NS, tag);
+    for(const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  const unit = n => Math.abs(n) === 1 ? 'Einheit' : 'Einheiten';
+
+  const v1 = u => ({x: -u * S,     y:  u * S});
+  const v2 = u => ({x:  u * 2 * S, y:  0});
+  const v3 = u => ({x:  0,         y: -u * 2 * S});
+
+  function geom(){
+    const {x1,x2,x3} = state;
+    const O = {x:0, y:0};
+    const A = {x: O.x + v1(x1).x, y: O.y + v1(x1).y};   // auf der x₁-Achse
+    const B = {x: A.x + v2(x2).x, y: A.y + v2(x2).y};   // Grundpunkt (x₃ = 0)
+    const P = {x: B.x + v3(x3).x, y: B.y + v3(x3).y};   // gesuchter Punkt
+    return {O,A,B,P};
+  }
+
+  function axisRange(val){
+    let pos = 5, neg = 5;
+    if(pos - val < 3) pos = val + 3;
+    if(neg + val < 3) neg = 3 - val;
+    return {pos, neg};
+  }
+  const EXT = 0.5;
+
+  function render(){
+    disp[3].textContent = state.x3;
+
+    const g = geom();
+    const r1 = axisRange(state.x1), r2 = axisRange(state.x2), r3 = axisRange(state.x3);
+    const t1p = v1(r1.pos + EXT),  t1n = v1(-(r1.neg + EXT));
+    const t2p = v2(r2.pos + EXT),  t2n = v2(-(r2.neg + EXT));
+    const t3p = v3(r3.pos + EXT),  t3n = v3(-(r3.neg + EXT));
+
+    const all = [g.O,g.A,g.B,g.P,t1p,t1n,t2p,t2n,t3p,t3n,
+                 {x:t1p.x-34,y:t1p.y+20},{x:g.P.x+90,y:g.P.y},{x:t2p.x+26,y:0}];
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    for(const p of all){ minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y); }
+    const pad = 1.6*S;
+    minX = Math.floor((minX-pad)/S)*S; minY = Math.floor((minY-pad)/S)*S;
+    maxX = Math.ceil((maxX+pad)/S)*S;  maxY = Math.ceil((maxY+pad)/S)*S;
+    const w = maxX-minX, h = maxY-minY;
+    sv.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`);
+    for(const b of [bg1,bg5]){ b.setAttribute('x',minX); b.setAttribute('y',minY); b.setAttribute('width',w); b.setAttribute('height',h); }
+
+    staticL.textContent = '';
+    const frag = document.createDocumentFragment();
+
+    const axis = (a,b,marker) => mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'var(--ink)','stroke-width':1.5,
+      'marker-end':`url(#${marker})`,'stroke-linecap':'round'});
+    frag.appendChild(axis(t1n, t1p, 'ah1'));
+    frag.appendChild(axis(t2n, t2p, 'ah2'));
+    frag.appendChild(axis(t3n, t3p, 'ah3'));
+
+    const tick = (p, dx, dy, col) => frag.appendChild(mk('line',{x1:p.x-dx,y1:p.y-dy,x2:p.x+dx,y2:p.y+dy,stroke:`var(${col})`,'stroke-width':1.5}));
+    const num = (p, ox, oy, txt) => {
+      const t = mk('text',{x:p.x+ox,y:p.y+oy,'font-size':10,fill:'var(--axisnum)','font-family':'"IBM Plex Mono",monospace','text-anchor':'middle'});
+      t.textContent = txt; frag.appendChild(t);
+    };
+    for(let i=-Math.floor(r1.neg);i<=Math.floor(r1.pos);i++){ if(!i)continue; const p=v1(i); tick(p,4,4,'--x1'); num(p,-11,4,i); }
+    for(let i=-Math.floor(r2.neg);i<=Math.floor(r2.pos);i++){ if(!i)continue; const p=v2(i); tick(p,0,4,'--x2'); num(p,0,18,i); }
+    for(let i=-Math.floor(r3.neg);i<=Math.floor(r3.pos);i++){ if(!i)continue; const p=v3(i); tick(p,4,0,'--x3'); num(p,-14,4,i); }
+
+    const lab = (p, ox, oy, cls, txt) => {
+      const t = mk('text',{x:p.x+ox,y:p.y+oy,'font-size':15,'font-weight':600,fill:`var(--${cls})`,'font-family':'"IBM Plex Sans",sans-serif'});
+      t.textContent = txt; frag.appendChild(t);
+    };
+    lab(t1p,-26,20,'x1','x₁');
+    lab(t2p,8,16,'x2','x₂');
+    lab(t3p,10,2,'x3','x₃');
+
+    frag.appendChild(mk('circle',{cx:0,cy:0,r:3,fill:'var(--ink)'}));
+    const o = mk('text',{x:-14,y:16,'font-size':12,fill:'var(--muted)','font-family':'"IBM Plex Mono",monospace'});
+    o.textContent='O'; frag.appendChild(o);
+
+    staticL.appendChild(frag);
+
+    hudX = minX + 18;
+    hudY = minY + 46;
+    play();
+  }
+
+  function syncSidebar(active){
+    for(let k=1;k<=3;k++){
+      disp[k].textContent = revealed[k] ? String(state['x'+k]) : '?';
+      disp[k].classList.toggle('glow', active === k && revealed[k]);
+    }
+  }
+
+  function renderHud(activeKey){
+    hud.textContent = '';
+    hudNums = {};
+    const F = 27, cw = F * 0.601;
+    const hx = hudX, hy = hudY;
+    hudBaseY = hy;
+
+    const parts = [
+      {s:'P ( ', col:'var(--muted)'},
+      {k:1}, {s:' | ', col:'var(--muted)'},
+      {k:2}, {s:' | ', col:'var(--muted)'},
+      {k:3}, {s:' )', col:'var(--muted)'},
+    ];
+    parts.forEach(p => {
+      if(p.k){
+        p.s = revealed[p.k] ? String(state['x'+p.k]) : '?';
+        p.col = revealed[p.k] ? `var(--x${p.k})` : 'var(--muted)';
+      }
+    });
+
+    const plain = parts.map(p => p.s).join('');
+    hud.appendChild(mk('rect',{x:hx-12, y:hy-F-2, width:plain.length*cw+24, height:F+14, rx:6,
+      fill:'var(--paper)','fill-opacity':0.88, stroke:'var(--line)','stroke-width':1}));
+
+    let cx = hx;
+    for(const p of parts){
+      const cellW = p.s.length * cw;
+      const mid = cx + cellW / 2;
+      let box = null;
+      if(p.k){
+        const bw = cw + 10;
+        box = mk('rect',{x:mid - bw/2, y:hy - F*0.8, width:bw, height:F*0.92, rx:4,
+          fill:`var(--x${p.k})`,'fill-opacity':0, stroke:`var(--x${p.k})`,'stroke-opacity':0,'stroke-width':1.5});
+        hud.appendChild(box);
+      }
+      const t = mk('text',{x:p.k?mid:cx, y:hy,'font-size':F,'font-weight':p.k?600:500,
+        'font-family':'"IBM Plex Mono",monospace', fill:p.col,'text-anchor':p.k?'middle':'start'});
+      t.textContent = p.s;
+      hud.appendChild(t);
+      if(p.k) hudNums[p.k] = {el:t, box:box, x:mid};
+      cx += cellW;
+    }
+    applyGlow(activeKey);
+  }
+
+  function applyGlow(active){
+    syncSidebar(active);
+    for(let k=1;k<=3;k++){
+      const n = hudNums[k]; if(!n) continue;
+      if(k === active){
+        n.el.style.filter = `url(#hudGlow${k})`;
+        n.el.setAttribute('transform', `translate(${n.x} ${hudBaseY}) scale(1.3) translate(${-n.x} ${-hudBaseY})`);
+        if(n.box){ n.box.setAttribute('fill-opacity', 0.15); n.box.setAttribute('stroke-opacity', 0.9); }
+      } else {
+        n.el.style.filter = 'none';
+        n.el.removeAttribute('transform');
+        if(n.box){ n.box.setAttribute('fill-opacity', 0); n.box.setAttribute('stroke-opacity', 0); }
+      }
+    }
+  }
+
+  function trail(a, b, colVar){
+    return mk('polyline',{points:`${a.x},${a.y} ${b.x},${b.y}`,fill:'none',
+      stroke:`var(${colVar})`,'stroke-width':3.2,'stroke-linecap':'round','stroke-linejoin':'round'});
+  }
+  const pointDot = (p) => mk('circle',{cx:p.x,cy:p.y,r:5.5,fill:'var(--ink)',stroke:'var(--paper)','stroke-width':2});
+  const nodeDot  = (p) => mk('circle',{cx:p.x,cy:p.y,r:4,fill:'var(--paper)',stroke:'var(--muted)','stroke-width':1.5});
+
+  function pointLabel(px, py, parent){
+    const t = mk('text',{x:px+12,y:py-12,'font-size':15,'font-weight':600,'font-family':'"IBM Plex Mono",monospace'});
+    const add = (txt,fill) => { const s=mk('tspan',fill?{fill:fill}:{}); s.textContent=txt; t.appendChild(s); };
+    add('P (', 'var(--muted)');
+    add(' '+state.x1+' ', 'var(--x1)'); add('|', 'var(--muted)');
+    add(' '+state.x2+' ', 'var(--x2)'); add('|', 'var(--muted)');
+    add(' '+state.x3+' ', 'var(--x3)'); add(')', 'var(--muted)');
+    parent.appendChild(t);
+  }
+
+  function drawFinal(g){
+    animL.textContent = '';
+    animL.appendChild(trail(g.P,g.B,'--x3'));
+    animL.appendChild(trail(g.B,g.A,'--x2'));
+    animL.appendChild(trail(g.A,g.O,'--x1'));
+    animL.appendChild(nodeDot(g.B));
+    animL.appendChild(nodeDot(g.A));
+    animL.appendChild(pointDot(g.P));
+    pointLabel(g.P.x, g.P.y, animL);
+  }
+
+  function phaseText(i){
+    const {x1,x2,x3} = state;
+    if(i===0) return `x₃ = ${x3} ist bekannt: von P aus ${Math.abs(x3)} ${unit(x3)} senkrecht nach ${x3<0?'oben':'unten'} bis zur x₁-x₂-Ebene.`;
+    if(i===1) return `Parallel zur x₂-Achse ${x2<0?'nach rechts':'nach links'} zählen, bis die x₁-Achse berührt wird: x₂ = ${x2}.`;
+    return `Von dort die Einheiten entlang x₁ bis zum Ursprung zählen: x₁ = ${x1}.`;
+  }
+
+  function play(){
+    if(animId) cancelAnimationFrame(animId);
+    if(loopId) clearTimeout(loopId);
+    animId = null; loopId = null;
+    animL.textContent = '';
+    const g = geom();
+
+    revealed = {1:false, 2:false, 3:true};
+
+    if(reduce){
+      drawFinal(g);
+      revealed = {1:true, 2:true, 3:true};
+      renderHud(-1);
+      cap.textContent = `P (${state.x1} | ${state.x2} | ${state.x3})`;
+      return;
+    }
+
+    // Punkt P ist bereits gegeben
+    animL.appendChild(pointDot(g.P));
+    const pl = mk('text',{x:g.P.x+12,y:g.P.y-12,'font-size':15,'font-weight':600,
+      'font-family':'"IBM Plex Mono",monospace',fill:'var(--muted)'});
+    pl.textContent = 'P'; animL.appendChild(pl);
+    renderHud(-1);
+
+    const segs = [
+      {a:g.P, b:g.B, c:'--x3', key:3},
+      {a:g.B, b:g.A, c:'--x2', key:2, reveal:2},
+      {a:g.A, b:g.O, c:'--x1', key:1, reveal:1},
+    ];
+    const runner = mk('circle',{r:5,fill:'var(--x3)',stroke:'var(--paper)','stroke-width':2});
+    let si = 0, segStart = null, curLine = null;
+
+    function frame(now){
+      const seg = segs[si];
+      if(segStart === null){
+        segStart = now;
+        curLine = trail(seg.a, seg.a, seg.c);
+        animL.appendChild(curLine);
+        animL.appendChild(runner);
+        runner.setAttribute('fill', `var(${seg.c})`);
+        renderHud(seg.key);
+        cap.textContent = phaseText(si);
+      }
+      const len = Math.hypot(seg.b.x-seg.a.x, seg.b.y-seg.a.y);
+      const base = len < 1 ? 320 : Math.max(2000, len * 9);
+      const dur = base / speed;
+      let p = (now - segStart) / dur;
+      if(p > 1) p = 1;
+      const ease = p<.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
+      const cx = seg.a.x + (seg.b.x-seg.a.x)*ease;
+      const cy = seg.a.y + (seg.b.y-seg.a.y)*ease;
+      curLine.setAttribute('points', `${seg.a.x},${seg.a.y} ${cx},${cy}`);
+      runner.setAttribute('cx', cx); runner.setAttribute('cy', cy);
+
+      if(p >= 1){
+        if(seg.reveal){ revealed[seg.reveal] = true; renderHud(seg.key); }
+        si++; segStart = null;
+        if(si >= segs.length){
+          drawFinal(g);
+          revealed = {1:true, 2:true, 3:true};
+          renderHud(-1);
+          cap.textContent = `P (${state.x1} | ${state.x2} | ${state.x3}) abgelesen. Ansicht 5 s, dann erneut.`;
+          animId = null;
+          loopId = setTimeout(play, LOOP_PAUSE);
+          return;
+        }
+      }
+      animId = requestAnimationFrame(frame);
+    }
+    animId = requestAnimationFrame(frame);
+  }
+
+  function clampVal(n){ n = Math.round(n || 0); return Math.max(-8, Math.min(12, n)); }
+  function commit(){
+    state.x3 = clampVal(parseInt(in3.value, 10));
+    in3.value = state.x3;
+    render();
+  }
+  function debounced(){ if(debId) clearTimeout(debId); debId = setTimeout(commit, 280); }
+
+  document.querySelectorAll('.stepper button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      in3.value = clampVal(parseInt(in3.value, 10) + (+btn.dataset.d));
+      commit();
+    });
+  });
+  in3.addEventListener('input', debounced);
+  in3.addEventListener('change', commit);
+  document.getElementById('replay').addEventListener('click', play);
+
+  render();
+  if(!reduce) setTimeout(play, 350);
+})();
+</script>
+</body>
+</html>
